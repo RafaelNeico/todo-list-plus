@@ -105,9 +105,5 @@ def delete_task(task_id):
     return redirect('/')
 
 if __name__ == '__main__':
-    print("=== SERVIDOR INICIANDO ===")
-    print("Verificando estrutura de pastas...")
-    init_db()
-    print("Banco de dados inicializado.")
-    print("Acesse: http://localhost:5000")
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
