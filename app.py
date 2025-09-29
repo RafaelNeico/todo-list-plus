@@ -1,109 +1,169 @@
-import requests
-import os
-
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request, redirect, url_for, g
 import sqlite3
+import os
+import requests
 
 app = Flask(__name__)
+DATABASE = 'tarefas.db'
+
+# Configuração da API do OpenWeather
+OPENWEATHER_API_KEY = '00242a4366f2f684e8f901da0d365d44'  # Substitua pela sua chave
+OPENWEATHER_BASE_URL = 'http://api.openweathermap.org/data/2.5/weather'
 
 def get_db():
-    conn = sqlite3.connect('tarefas.db')
-    conn.row_factory = sqlite3.Row
-    return conn
+    if not hasattr(g, '_database'):
+        g._database = sqlite3.connect(DATABASE)
+        g._database.row_factory = sqlite3.Row
+    return g._database
+
+@app.teardown_appcontext
+def close_connection(exception):
+    if hasattr(g, '_database'):
+        g._database.close()
 
 def init_db():
-    conn = get_db()
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS tarefas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            descricao TEXT NOT NULL,
-            categoria TEXT DEFAULT 'Geral',
-            prazo TEXT,
-            concluida BOOLEAN DEFAULT 0,
-            data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    conn.commit()
-    conn.close()
+    with app.app_context():
+        db = get_db()
+        db.execute('''
+            CREATE TABLE IF NOT EXISTS tariffs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                descricao TEXT NOT NULL,
+                categoria TEXT,
+                prioridade TEXT,
+                prazo TEXT,
+                concluida BOOLEAN DEFAULT 0
+            )
+        ''')
+        db.commit()
 
-def obter_clima(cidade="Sao Paulo"):
-    """Obtém dados do clima para uma cidade"""
+def get_weather_data(city='São Paulo'):
+    """
+    Obtém dados do clima para uma cidade específica
+    """
+    if OPENWEATHER_API_KEY == 'sua_chave_aqui':
+        return None
+        
     try:
-        # SUA CHAVE API AQUI - substitua pela chave real
-        api_key = "00242a4366f2f684e8f901da0d365d44"  
-        url = f"http://api.openweathermap.org/data/2.5/weather?q={cidade}&appid={api_key}&units=metric&lang=pt_br"
+        params = {
+            'q': city,
+            'appid': OPENWEATHER_API_KEY,
+            'units': 'metric',  # Para temperatura em Celsius
+            'lang': 'pt_br'     # Para descrições em português
+        }
         
-        print("Debug: Tentando obter clima para:", cidade)
-        print("Debug: URL da API:", url)
-        
-        response = requests.get(url)
-        print("Debug: Status code:", response.status_code)
+        response = requests.get(OPENWEATHER_BASE_URL, params=params, timeout=10)
         
         if response.status_code == 200:
-            dados = response.json()
-            print("Debug: Dados do clima obtidos com sucesso!")
-            
+            data = response.json()
             return {
-                'cidade': dados['name'],
-                'temperatura': dados['main']['temp'],
-                'descricao': dados['weather'][0]['description'],
-                'icone': dados['weather'][0]['icon'],
-                'sensacao': dados['main']['feels_like'],
-                'umidade': dados['main']['humidity']
+                'cidade': data['name'],
+                'temperatura': round(data['main']['temp']),
+                'descricao': data['weather'][0]['description'].title(),
+                'icone': data['weather'][0]['icon'],
+                'humidade': data['main']['humidity'],
+                'vento': round(data['wind']['speed'] * 3.6),  # Converte m/s para km/h
+                'sensacao': round(data['main']['feels_like'])
             }
         else:
-            print("Debug: Erro API:", response.status_code, "-", response.text)
+            print(f"Erro na API do clima: {response.status_code}")
             return None
+            
     except Exception as e:
-        print("Debug: Erro ao obter clima:", str(e))
+        print(f"Erro ao buscar dados do clima: {e}")
         return None
-    
+
+# Rota principal
 @app.route('/')
 def index():
-    init_db()
-    conn = get_db()
-    tarefas = conn.execute('SELECT * FROM tarefas ORDER BY data_criacao DESC').fetchall()
-    conn.close()
-    
-    # Obter dados do clima
-    clima = obter_clima()
-    print("Debug: Clima retornado:", clima)
-    
-    return render_template('index.html', tarefas=tarefas, clima=clima)
+    try:
+        db = get_db()
+        cursor = db.execute('SELECT * FROM tariffs ORDER BY id DESC')
+        tarefas = cursor.fetchall()
+        
+        lista_tarefas = []
+        for tarefa in tarefas:
+            lista_tarefas.append({
+                'id': tarefa['id'],
+                'descricao': tarefa['descricao'],
+                'categoria': tarefa['categoria'],
+                'prioridade': tarefa['prioridade'],
+                'prazo': tarefa['prazo'],
+                'concluida': tarefa['concluida']
+            })
+        
+        # Obter dados do clima
+        weather_data = get_weather_data()
+        
+        return render_template('index.html', 
+                             tarefas=lista_tarefas, 
+                             weather=weather_data)
+                             
+    except Exception as e:
+        print("Erro ao carregar tarefas:", e)
+        return render_template('index.html', tarefas=[], weather=None)
 
 @app.route('/add', methods=['POST'])
 def add_task():
-    descricao = request.form['descricao']
-    categoria = request.form.get('categoria', 'Geral')
-    prazo = request.form.get('prazo', '')
-    
-    conn = get_db()
-    conn.execute('INSERT INTO tarefas (descricao, categoria, prazo) VALUES (?, ?, ?)',
-                 (descricao, categoria, prazo))
-    conn.commit()
-    conn.close()
-    
-    return redirect('/')
+    try:
+        descricao = request.form['descricao']
+        categoria = request.form.get('categoria', 'Geral')
+        prioridade = request.form.get('prioridade', 'Média')
+        prazo = request.form.get('prazo', '')
+        
+        db = get_db()
+        db.execute('INSERT INTO tariffs (descricao, categoria, prioridade, prazo) VALUES (?, ?, ?, ?)',
+                  (descricao, categoria, prioridade, prazo))
+        db.commit()
+        
+        return redirect('/')
+    except Exception as e:
+        return f"Erro ao adicionar tarefa: {str(e)}", 500
 
-@app.route('/complete/<int:task_id>')
-def complete_task(task_id):
-    conn = get_db()
-    task = conn.execute('SELECT * FROM tarefas WHERE id = ?', (task_id,)).fetchone()
-    if task:
-        new_status = 0 if task['concluida'] else 1
-        conn.execute('UPDATE tarefas SET concluida = ? WHERE id = ?', (new_status, task_id))
-        conn.commit()
-    conn.close()
-    return redirect('/')
+@app.route('/concluir/<int:tarefa_id>')
+def concluir_tarefa(tarefa_id):
+    try:
+        db = get_db()
+        db.execute('UPDATE tariffs SET concluida = 1 WHERE id = ?', (tarefa_id,))
+        db.commit()
+        return redirect('/')
+    except Exception as e:
+        return f"Erro ao concluir tarefa: {str(e)}", 500
 
-@app.route('/delete/<int:task_id>')
-def delete_task(task_id):
-    conn = get_db()
-    conn.execute('DELETE FROM tarefas WHERE id = ?', (task_id,))
-    conn.commit()
-    conn.close()
-    return redirect('/')
+@app.route('/reabrir/<int:tarefa_id>')
+def reabrir_tarefa(tarefa_id):
+    try:
+        db = get_db()
+        db.execute('UPDATE tariffs SET concluida = 0 WHERE id = ?', (tarefa_id,))
+        db.commit()
+        return redirect('/')
+    except Exception as e:
+        return f"Erro ao reabrir tarefa: {str(e)}", 500
+
+@app.route('/excluir/<int:tarefa_id>')
+def excluir_tarefa(tarefa_id):
+    try:
+        db = get_db()
+        db.execute('DELETE FROM tariffs WHERE id = ?', (tarefa_id,))
+        db.commit()
+        return redirect('/')
+    except Exception as e:
+        return f"Erro ao excluir tarefa: {str(e)}", 500
+
+@app.route('/limpar_concluidas')
+def limpar_concluidas():
+    try:
+        db = get_db()
+        db.execute('DELETE FROM tariffs WHERE concluida = 1')
+        db.commit()
+        return redirect('/')
+    except Exception as e:
+        return f"Erro ao limpar tarefas concluidas: {str(e)}", 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    if not os.path.exists(DATABASE):
+        print("Criando novo banco de dados...")
+        init_db()
+    else:
+        print("Banco de dados ja existe.")
+    
+    app.run(debug=True, host='0.0.0.0', port=5000)
