@@ -6,8 +6,8 @@ import requests
 app = Flask(__name__)
 DATABASE = 'tarefas.db'
 
-# Configuração da API do OpenWeather
-OPENWEATHER_API_KEY = '00242a4366f2f684e8f901da0d365d44'  # Substitua pela sua chave
+# Configuração da API do OpenWeather - usando variável de ambiente
+OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY', '00242a4366f2f684e8f901da0d365d44')
 OPENWEATHER_BASE_URL = 'http://api.openweathermap.org/data/2.5/weather'
 
 def get_db():
@@ -40,7 +40,7 @@ def get_weather_data(city='São Paulo'):
     """
     Obtém dados do clima para uma cidade específica
     """
-    if OPENWEATHER_API_KEY == 'sua_chave_aqui':
+    if OPENWEATHER_API_KEY == 'sua_chave_aqui' or not OPENWEATHER_API_KEY:
         return None
         
     try:
@@ -166,4 +166,6 @@ if __name__ == '__main__':
     else:
         print("Banco de dados ja existe.")
     
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Configuração para produção - usar porta do Render
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=False, host='0.0.0.0', port=port)
