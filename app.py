@@ -1,260 +1,213 @@
 import os
 import psycopg2
-from flask import Flask, render_template, request, redirect
-import requests
+from flask import Flask, render_template, request, redirect, url_for, jsonify
+from datetime import datetime
+import logging
+
+# Configuração de logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
+# Configuração do banco de dados
 def get_db_connection():
-    """Conecta ao PostgreSQL no Render com debug"""
-    database_url = os.environ.get('DATABASE_URL')
-    
-    print("=" * 50)
-    print("🔍 DEBUG DATABASE CONNECTION")
-    print(f"DATABASE_URL exists: {bool(database_url)}")
-    if database_url:
-        print(f"URL starts with: {database_url[:50]}...")
-    
-    if database_url:
-        try:
-            # Conecta ao PostgreSQL
-            conn = psycopg2.connect(database_url, sslmode='require')
+    """Estabelece conexão com o banco de dados"""
+    try:
+        # No Render, usa DATABASE_URL do environment
+        database_url = os.environ.get('DATABASE_URL')
+        
+        if not database_url:
+            logger.error("DATABASE_URL não encontrada")
+            return None
             
-            # Testa a conexão
-            cursor = conn.cursor()
-            cursor.execute("SELECT version();")
-            db_version = cursor.fetchone()
-            print(f"✅ PostgreSQL connected: {db_version[0]}")
-            cursor.close()
+        # Ajusta a string de conexão se necessário
+        if database_url.startswith("postgres://"):
+            database_url = database_url.replace("postgres://", "postgresql://", 1)
             
-            return conn
-        except Exception as e:
-            print(f"❌ PostgreSQL connection failed: {e}")
-            print("🔄 Falling back to SQLite...")
-            return get_sqlite_connection()
-    else:
-        print("ℹ️  No DATABASE_URL, using SQLite")
-        return get_sqlite_connection()
-
-def get_sqlite_connection():
-    """Fallback para SQLite"""
-    import sqlite3
-    # No Render, usa /tmp para persistência
-    db_path = '/tmp/tarefas.db' if os.environ.get('RENDER') else 'tarefas.db'
-    print(f"📁 SQLite path: {db_path}")
-    
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    return conn
+        conn = psycopg2.connect(database_url)
+        return conn
+    except Exception as e:
+        logger.error(f"Erro ao conectar com o banco: {e}")
+        return None
 
 def init_db():
-    """Cria tabelas se não existirem"""
-    print("🔄 Initializing database...")
+    """Inicializa o banco de dados criando a tabela se não existir"""
     conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Detecta se é PostgreSQL
-    is_postgres = os.environ.get('DATABASE_URL')
-    print(f"📊 Database type: {'PostgreSQL' if is_postgres else 'SQLite'}")
-    
-    if is_postgres:
-        # PostgreSQL
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS tarefas (
-                id SERIAL PRIMARY KEY,
-                descricao TEXT NOT NULL,
-                categoria TEXT DEFAULT 'Geral',
-                prioridade TEXT DEFAULT 'Média',
-                prazo TEXT,
-                concluida BOOLEAN DEFAULT FALSE,
-                data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        print("✅ PostgreSQL table created/verified")
-    else:
-        # SQLite
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS tarefas (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                descricao TEXT NOT NULL,
-                categoria TEXT DEFAULT 'Geral',
-                prioridade TEXT DEFAULT 'Média',
-                prazo TEXT,
-                concluida BOOLEAN DEFAULT 0,
-                data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        print("✅ SQLite table created/verified")
-    
-    conn.commit()
-    
-    # Conta tarefas existentes
-    cursor.execute("SELECT COUNT(*) FROM tarefas")
-    count = cursor.fetchone()[0]
-    print(f"📈 Total tasks in database: {count}")
-    
-    conn.close()
-    print("✅ Database initialization complete")
+    if conn is None:
+        return False
+        
+    try:
+        with conn.cursor() as cur:
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS tarefas (
+                    id SERIAL PRIMARY KEY,
+                    titulo VARCHAR(200) NOT NULL,
+                    descricao TEXT,
+                    concluida BOOLEAN DEFAULT FALSE,
+                    data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            conn.commit()
+            logger.info("Tabela 'tarefas' verificada/criada com sucesso")
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao criar tabela: {e}")
+        return False
+    finally:
+        conn.close()
 
 @app.route('/')
 def index():
+    """Página principal - Lista todas as tarefas"""
+    conn = get_db_connection()
+    if conn is None:
+        return render_template('error.html', message="Erro de conexão com o banco de dados")
+    
     try:
-        print("\n🌐 HOME PAGE REQUEST")
-        init_db()
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT * FROM tarefas ORDER BY id DESC')
-        tarefas_data = cursor.fetchall()
-        
-        print(f"📋 Tasks fetched: {len(tarefas_data)}")
-        
-        # Converter para formato padrão
-        tarefas = []
-        for tarefa in tarefas_data:
-            tarefas.append({
+        with conn.cursor() as cur:
+            cur.execute('SELECT * FROM tarefas ORDER BY data_criacao DESC')
+            tarefas = cur.fetchall()
+            
+        # Converter para lista de dicionários
+        tarefas_list = []
+        for tarefa in tarefas:
+            tarefas_list.append({
                 'id': tarefa[0],
-                'descricao': tarefa[1],
-                'categoria': tarefa[2],
-                'prioridade': tarefa[3],
-                'prazo': tarefa[4],
-                'concluida': tarefa[5]
+                'titulo': tarefa[1],
+                'descricao': tarefa[2],
+                'concluida': tarefa[3],
+                'data_criacao': tarefa[4]
             })
-        
-        conn.close()
-        
-        weather = get_weather_data()
-        return render_template('index.html', tarefas=tarefas, weather=weather)
+            
+        return render_template('index.html', tarefas=tarefas_list)
         
     except Exception as e:
-        print(f"❌ Error in index: {e}")
-        return render_template('index.html', tarefas=[], weather=None)
+        logger.error(f"Erro ao buscar tarefas: {e}")
+        return render_template('error.html', message="Erro ao carregar tarefas")
+    finally:
+        conn.close()
 
-@app.route('/add', methods=['POST'])
-def add_task():
+@app.route('/adicionar', methods=['POST'])
+def adicionar_tarefa():
+    """Adiciona uma nova tarefa"""
+    titulo = request.form.get('titulo', '').strip()
+    descricao = request.form.get('descricao', '').strip()
+    
+    if not titulo:
+        return redirect(url_for('index'))
+    
+    conn = get_db_connection()
+    if conn is None:
+        return redirect(url_for('index'))
+    
     try:
-        descricao = request.form['descricao']
-        categoria = request.form.get('categoria', 'Geral')
-        prioridade = request.form.get('prioridade', 'Média')
-        prazo = request.form.get('prazo', '')
-        
-        print(f"\n➕ ADDING TASK: {descricao}")
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        if os.environ.get('DATABASE_URL'):
-            # PostgreSQL
-            cursor.execute(
-                'INSERT INTO tarefas (descricao, categoria, prioridade, prazo) VALUES (%s, %s, %s, %s) RETURNING id',
-                (descricao, categoria, prioridade, prazo)
+        with conn.cursor() as cur:
+            cur.execute(
+                'INSERT INTO tarefas (titulo, descricao) VALUES (%s, %s)',
+                (titulo, descricao)
             )
-            task_id = cursor.fetchone()[0]
-            print(f"✅ Task added to PostgreSQL with ID: {task_id}")
-        else:
-            # SQLite
-            cursor.execute(
-                'INSERT INTO tarefas (descricao, categoria, prioridade, prazo) VALUES (?, ?, ?, ?)',
-                (descricao, categoria, prioridade, prazo)
-            )
-            task_id = cursor.lastrowid
-            print(f"✅ Task added to SQLite with ID: {task_id}")
-        
-        conn.commit()
-        conn.close()
-        return redirect('/')
-        
+            conn.commit()
+        return redirect(url_for('index'))
     except Exception as e:
-        print(f"❌ Error adding task: {e}")
-        return f"Erro ao adicionar: {str(e)}", 500
+        logger.error(f"Erro ao adicionar tarefa: {e}")
+        return redirect(url_for('index'))
+    finally:
+        conn.close()
 
 @app.route('/concluir/<int:tarefa_id>')
 def concluir_tarefa(tarefa_id):
+    """Marca uma tarefa como concluída"""
+    conn = get_db_connection()
+    if conn is None:
+        return redirect(url_for('index'))
+    
     try:
-        print(f"✅ COMPLETING TASK: {tarefa_id}")
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        if os.environ.get('DATABASE_URL'):
-            cursor.execute('UPDATE tarefas SET concluida = TRUE WHERE id = %s', (tarefa_id,))
-        else:
-            cursor.execute('UPDATE tarefas SET concluida = 1 WHERE id = ?', (tarefa_id,))
-        
-        conn.commit()
-        conn.close()
-        print(f"✅ Task {tarefa_id} completed")
-        return redirect('/')
+        with conn.cursor() as cur:
+            cur.execute(
+                'UPDATE tarefas SET concluida = TRUE WHERE id = %s',
+                (tarefa_id,)
+            )
+            conn.commit()
+        return redirect(url_for('index'))
     except Exception as e:
-        print(f"❌ Error completing task: {e}")
-        return f"Erro ao concluir tarefa: {str(e)}", 500
-
-@app.route('/reabrir/<int:tarefa_id>')
-def reabrir_tarefa(tarefa_id):
-    try:
-        print(f"🔄 REOPENING TASK: {tarefa_id}")
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        if os.environ.get('DATABASE_URL'):
-            cursor.execute('UPDATE tarefas SET concluida = FALSE WHERE id = %s', (tarefa_id,))
-        else:
-            cursor.execute('UPDATE tarefas SET concluida = 0 WHERE id = ?', (tarefa_id,))
-        
-        conn.commit()
+        logger.error(f"Erro ao concluir tarefa: {e}")
+        return redirect(url_for('index'))
+    finally:
         conn.close()
-        print(f"✅ Task {tarefa_id} reopened")
-        return redirect('/')
-    except Exception as e:
-        print(f"❌ Error reopening task: {e}")
-        return f"Erro ao reabrir tarefa: {str(e)}", 500
 
 @app.route('/excluir/<int:tarefa_id>')
 def excluir_tarefa(tarefa_id):
+    """Exclui uma tarefa"""
+    conn = get_db_connection()
+    if conn is None:
+        return redirect(url_for('index'))
+    
     try:
-        print(f"🗑️ DELETING TASK: {tarefa_id}")
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        if os.environ.get('DATABASE_URL'):
-            cursor.execute('DELETE FROM tarefas WHERE id = %s', (tarefa_id,))
-        else:
-            cursor.execute('DELETE FROM tarefas WHERE id = ?', (tarefa_id,))
-        
-        conn.commit()
+        with conn.cursor() as cur:
+            cur.execute('DELETE FROM tarefas WHERE id = %s', (tarefa_id,))
+            conn.commit()
+        return redirect(url_for('index'))
+    except Exception as e:
+        logger.error(f"Erro ao excluir tarefa: {e}")
+        return redirect(url_for('index'))
+    finally:
         conn.close()
-        print(f"✅ Task {tarefa_id} deleted")
-        return redirect('/')
-    except Exception as e:
-        print(f"❌ Error deleting task: {e}")
-        return f"Erro ao excluir tarefa: {str(e)}", 500
 
-def get_weather_data(city='São Paulo'):
-    """Sua função existente do clima"""
+@app.route('/api/tarefas', methods=['GET'])
+def api_tarefas():
+    """API para listar tarefas (JSON)"""
+    conn = get_db_connection()
+    if conn is None:
+        return jsonify({'error': 'Database connection failed'}), 500
+    
     try:
-        api_key = os.environ.get('OPENWEATHER_API_KEY', 'sua_chave_aqui')
-        if not api_key or api_key == 'sua_chave_aqui':
-            return None
+        with conn.cursor() as cur:
+            cur.execute('SELECT * FROM tarefas ORDER BY data_criacao DESC')
+            tarefas = cur.fetchall()
             
-        url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric&lang=pt_br"
-        response = requests.get(url)
+        tarefas_list = []
+        for tarefa in tarefas:
+            tarefas_list.append({
+                'id': tarefa[0],
+                'titulo': tarefa[1],
+                'descricao': tarefa[2],
+                'concluida': tarefa[3],
+                'data_criacao': tarefa[4].isoformat() if tarefa[4] else None
+            })
+            
+        return jsonify(tarefas_list)
         
-        if response.status_code == 200:
-            data = response.json()
-            return {
-                'cidade': data['name'],
-                'temperatura': round(data['main']['temp']),
-                'descricao': data['weather'][0]['description'].title(),
-                'icone': data['weather'][0]['icon'],
-                'sensacao': round(data['main']['feels_like'])
-            }
-        return None
     except Exception as e:
-        print(f"❌ Weather API error: {e}")
-        return None
+        logger.error(f"Erro na API: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
 
+@app.route('/health')
+def health_check():
+    """Endpoint de health check para o Render"""
+    conn = get_db_connection()
+    db_status = "healthy" if conn else "unhealthy"
+    if conn:
+        conn.close()
+    
+    return jsonify({
+        'status': 'healthy',
+        'database': db_status,
+        'timestamp': datetime.now().isoformat()
+    })
+
+# Inicialização do app
 if __name__ == '__main__':
-    print("🚀 Starting Flask application...")
-    init_db()
+    # Tentar inicializar o banco
+    if init_db():
+        logger.info("Banco de dados inicializado com sucesso")
+    else:
+        logger.warning("Falha ao inicializar banco de dados")
+    
+    # Configurações para produção
     port = int(os.environ.get('PORT', 5000))
-    print(f"🌐 Server running on port {port}")
-    app.run(host='0.0.0.0', port=port)
+    debug = os.environ.get('DEBUG', 'False').lower() == 'true'
+    
+    app.run(host='0.0.0.0', port=port, debug=debug)
