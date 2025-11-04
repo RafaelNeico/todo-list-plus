@@ -3,7 +3,7 @@
 Projeto Integrador da disciplina PJI240 - Projeto Integrador em Computação II
 
 ## Descrição
-Sistema web para gerenciamento de tarefas integrado com previsão do tempo.
+Sistema web para gerenciamento de tarefas integrado com previsão do tempo. sos
 
 ## Tecnologias
 - Flask (Python)
