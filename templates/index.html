@@ -5,281 +5,58 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gerenciador de Tarefas</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }
-        
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
-        
-        .content {
-            padding: 30px;
-        }
-        
-        .form-tarefa {
-            background: #f8f9fa;
-            padding: 25px;
-            border-radius: 10px;
-            margin-bottom: 30px;
-        }
-        
-        .form-group {
-            margin-bottom: 15px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 600;
-            color: #333;
-        }
-        
-        .form-group input,
-        .form-group textarea {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: border-color 0.3s;
-        }
-        
-        .form-group input:focus,
-        .form-group textarea:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        
-        .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 12px 30px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            transition: transform 0.2s;
-        }
-        
-        .btn:hover {
-            transform: translateY(-2px);
-        }
-        
-        .lista-tarefas {
-            space-y: 15px;
-        }
-        
-        .tarefa-item {
-            background: white;
-            border: 2px solid #e9ecef;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 15px;
-            transition: all 0.3s;
-        }
-        
-        .tarefa-item:hover {
-            border-color: #667eea;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-        
-        .tarefa-item.concluida {
-            background: #f8fff9;
-            border-color: #28a745;
-            opacity: 0.8;
-        }
-        
-        .tarefa-titulo {
-            font-size: 1.3em;
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 8px;
-        }
-        
-        .tarefa-item.concluida .tarefa-titulo {
-            text-decoration: line-through;
-            color: #28a745;
-        }
-        
-        .tarefa-descricao {
-            color: #666;
-            margin-bottom: 15px;
-            line-height: 1.5;
-        }
-        
-        .tarefa-data {
-            font-size: 0.9em;
-            color: #999;
-            margin-bottom: 15px;
-        }
-        
-        .tarefa-acoes {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        
-        .btn-concluir {
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        
-        .btn-excluir {
-            background: #dc3545;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        
-        .btn-small {
-            padding: 6px 12px;
-            font-size: 12px;
-        }
-        
-        .empty-state {
-            text-align: center;
-            padding: 40px;
-            color: #666;
-        }
-        
-        .empty-state i {
-            font-size: 3em;
-            margin-bottom: 15px;
-            opacity: 0.5;
-        }
-        
-        .status-bar {
-            background: #f8f9fa;
-            padding: 15px;
-            text-align: center;
-            border-top: 1px solid #e9ecef;
-            font-size: 0.9em;
-            color: #666;
-        }
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .form-tarefa { background: #f5f5f5; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .form-group { margin-bottom: 15px; }
+        input, textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+        .tarefa-item { background: white; border: 1px solid #ddd; padding: 15px; margin-bottom: 10px; border-radius: 4px; }
+        .tarefa-item.concluida { background: #d4edda; border-color: #c3e6cb; }
+        .tarefa-acoes { margin-top: 10px; }
+        .btn { padding: 5px 10px; text-decoration: none; border-radius: 3px; margin-right: 5px; display: inline-block; }
+        .btn-concluir { background: #28a745; color: white; }
+        .btn-excluir { background: #dc3545; color: white; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>📝 Gerenciador de Tarefas</h1>
-            <p>Organize suas tarefas de forma simples e eficiente</p>
+    <h1>📝 Gerenciador de Tarefas</h1>
+    
+    <form class="form-tarefa" action="/adicionar" method="POST">
+        <div class="form-group">
+            <label>Título:</label>
+            <input type="text" name="titulo" required placeholder="Digite o título...">
         </div>
-        
-        <div class="content">
-            <!-- Formulário para adicionar tarefa -->
-            <form class="form-tarefa" action="/adicionar" method="POST">
-                <div class="form-group">
-                    <label for="titulo">Título da Tarefa:</label>
-                    <input type="text" id="titulo" name="titulo" required 
-                           placeholder="Digite o título da tarefa...">
-                </div>
-                
-                <div class="form-group">
-                    <label for="descricao">Descrição (opcional):</label>
-                    <textarea id="descricao" name="descricao" rows="3" 
-                              placeholder="Digite uma descrição detalhada..."></textarea>
-                </div>
-                
-                <button type="submit" class="btn">➕ Adicionar Tarefa</button>
-            </form>
-            
-            <!-- Lista de tarefas -->
-            <div class="lista-tarefas">
-                {% if tarefas %}
-                    {% for tarefa in tarefas %}
-                        <div class="tarefa-item {% if tarefa.concluida %}concluida{% endif %}">
-                            <div class="tarefa-titulo">
-                                {{ tarefa.titulo }}
-                                {% if tarefa.concluida %} ✅{% endif %}
-                            </div>
-                            
-                            {% if tarefa.descricao %}
-                                <div class="tarefa-descricao">{{ tarefa.descricao }}</div>
-                            {% endif %}
-                            
-                            <div class="tarefa-data">
-                                Criada em: {{ tarefa.data_criacao.strftime('%d/%m/%Y %H:%M') }}
-                            </div>
-                            
-                            <div class="tarefa-acoes">
-                                {% if not tarefa.concluida %}
-                                    <a href="/concluir/{{ tarefa.id }}" class="btn-concluir">
-                                        ✅ Concluir
-                                    </a>
-                                {% endif %}
-                                <a href="/excluir/{{ tarefa.id }}" class="btn-excluir" 
-                                   onclick="return confirm('Tem certeza que deseja excluir esta tarefa?')">
-                                    🗑️ Excluir
-                                </a>
-                            </div>
-                        </div>
-                    {% endfor %}
-                {% else %}
-                    <div class="empty-state">
-                        <div>📋</div>
-                        <h3>Nenhuma tarefa encontrada</h3>
-                        <p>Adicione sua primeira tarefa usando o formulário acima!</p>
+        <div class="form-group">
+            <label>Descrição (opcional):</label>
+            <textarea name="descricao" rows="3" placeholder="Digite a descrição..."></textarea>
+        </div>
+        <button type="submit">Adicionar Tarefa</button>
+    </form>
+
+    <div class="lista-tarefas">
+        {% if tarefas %}
+            {% for tarefa in tarefas %}
+                <div class="tarefa-item {% if tarefa.concluida %}concluida{% endif %}">
+                    <h3>{{ tarefa.titulo }}{% if tarefa.concluida %} ✅{% endif %}</h3>
+                    {% if tarefa.descricao %}<p>{{ tarefa.descricao }}</p>{% endif %}
+                    <small>Criada em: {{ tarefa.data_criacao.strftime('%d/%m/%Y %H:%M') }}</small>
+                    
+                    <div class="tarefa-acoes">
+                        {% if not tarefa.concluida %}
+                            <a href="/concluir/{{ tarefa.id }}" class="btn btn-concluir">Concluir</a>
+                        {% endif %}
+                        <a href="/excluir/{{ tarefa.id }}" class="btn btn-excluir" 
+                           onclick="return confirm('Tem certeza?')">Excluir</a>
                     </div>
-                {% endif %}
-            </div>
-        </div>
-        
-        <div class="status-bar">
-            Sistema funcionando • 
-            <a href="/health" style="color: #667eea;">Verificar Status</a> • 
-            <a href="/api/tarefas" style="color: #667eea;">API JSON</a>
-        </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p>Nenhuma tarefa encontrada. Adicione a primeira tarefa!</p>
+        {% endif %}
     </div>
 
-    <script>
-        // Adiciona confirmação para exclusão
-        document.addEventListener('DOMContentLoaded', function() {
-            const deleteButtons = document.querySelectorAll('.btn-excluir');
-            deleteButtons.forEach(button => {
-                button.addEventListener('click', function(e) {
-                    if (!confirm('Tem certeza que deseja excluir esta tarefa?')) {
-                        e.preventDefault();
-                    }
-                });
-            });
-        });
-    </script>
+    <div style="margin-top: 20px; text-align: center;">
+        <a href="/health">Status do Sistema</a>
+    </div>
 </body>
 </html>
