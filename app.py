@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import os
 import psycopg2
 from urllib.parse import urlparse
@@ -5,11 +6,21 @@ from flask import Flask, render_template, request, redirect
 import requests
 
 app = Flask(__name__)
+=======
+from flask import Flask, render_template, request, redirect, url_for, g
+import sqlite3
+import os
+import requests
+
+app = Flask(__name__)
+DATABASE = 'tarefas.db'
+>>>>>>> 7aa070119729e6bd15013bf3f4d6392e52058414
 
 # Configuração da API do OpenWeather - usando variável de ambiente
 OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY', '00242a4366f2f684e8f901da0d365d44')
 OPENWEATHER_BASE_URL = 'http://api.openweathermap.org/data/2.5/weather'
 
+<<<<<<< HEAD
 # Configuração do PostgreSQL
 def get_db_connection():
     # No Render, use a variável de ambiente DATABASE_URL
@@ -71,6 +82,35 @@ def init_db():
     conn.close()
 
     def get_weather_data(city='São Paulo'):
+=======
+def get_db():
+    if not hasattr(g, '_database'):
+        g._database = sqlite3.connect(DATABASE)
+        g._database.row_factory = sqlite3.Row
+    return g._database
+
+@app.teardown_appcontext
+def close_connection(exception):
+    if hasattr(g, '_database'):
+        g._database.close()
+
+def init_db():
+    with app.app_context():
+        db = get_db()
+        db.execute('''
+            CREATE TABLE IF NOT EXISTS tariffs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                descricao TEXT NOT NULL,
+                categoria TEXT,
+                prioridade TEXT,
+                prazo TEXT,
+                concluida BOOLEAN DEFAULT 0
+            )
+        ''')
+        db.commit()
+
+def get_weather_data(city='São Paulo'):
+>>>>>>> 7aa070119729e6bd15013bf3f4d6392e52058414
     """
     Obtém dados do clima para uma cidade específica
     """
@@ -110,6 +150,7 @@ def init_db():
 @app.route('/')
 def index():
     try:
+<<<<<<< HEAD
         init_db()  # Garante que a tabela existe
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -131,6 +172,23 @@ def index():
         
         conn.close()
         
+=======
+        db = get_db()
+        cursor = db.execute('SELECT * FROM tariffs ORDER BY id DESC')
+        tarefas = cursor.fetchall()
+        
+        lista_tarefas = []
+        for tarefa in tarefas:
+            lista_tarefas.append({
+                'id': tarefa['id'],
+                'descricao': tarefa['descricao'],
+                'categoria': tarefa['categoria'],
+                'prioridade': tarefa['prioridade'],
+                'prazo': tarefa['prazo'],
+                'concluida': tarefa['concluida']
+            })
+        
+>>>>>>> 7aa070119729e6bd15013bf3f4d6392e52058414
         # Obter dados do clima
         weather_data = get_weather_data()
         
@@ -150,6 +208,7 @@ def add_task():
         prioridade = request.form.get('prioridade', 'Média')
         prazo = request.form.get('prazo', '')
         
+<<<<<<< HEAD
         conn = get_db_connection()
         cursor = conn.cursor()
         
@@ -168,6 +227,12 @@ def add_task():
         
         conn.commit()
         conn.close()
+=======
+        db = get_db()
+        db.execute('INSERT INTO tariffs (descricao, categoria, prioridade, prazo) VALUES (?, ?, ?, ?)',
+                  (descricao, categoria, prioridade, prazo))
+        db.commit()
+>>>>>>> 7aa070119729e6bd15013bf3f4d6392e52058414
         
         return redirect('/')
     except Exception as e:
@@ -176,6 +241,7 @@ def add_task():
 @app.route('/concluir/<int:tarefa_id>')
 def concluir_tarefa(tarefa_id):
     try:
+<<<<<<< HEAD
         conn = get_db_connection()
         cursor = conn.cursor()
         
@@ -186,6 +252,11 @@ def concluir_tarefa(tarefa_id):
         
         conn.commit()
         conn.close()
+=======
+        db = get_db()
+        db.execute('UPDATE tariffs SET concluida = 1 WHERE id = ?', (tarefa_id,))
+        db.commit()
+>>>>>>> 7aa070119729e6bd15013bf3f4d6392e52058414
         return redirect('/')
     except Exception as e:
         return f"Erro ao concluir tarefa: {str(e)}", 500
@@ -193,6 +264,7 @@ def concluir_tarefa(tarefa_id):
 @app.route('/reabrir/<int:tarefa_id>')
 def reabrir_tarefa(tarefa_id):
     try:
+<<<<<<< HEAD
         conn = get_db_connection()
         cursor = conn.cursor()
         
@@ -203,6 +275,11 @@ def reabrir_tarefa(tarefa_id):
         
         conn.commit()
         conn.close()
+=======
+        db = get_db()
+        db.execute('UPDATE tariffs SET concluida = 0 WHERE id = ?', (tarefa_id,))
+        db.commit()
+>>>>>>> 7aa070119729e6bd15013bf3f4d6392e52058414
         return redirect('/')
     except Exception as e:
         return f"Erro ao reabrir tarefa: {str(e)}", 500
@@ -210,6 +287,7 @@ def reabrir_tarefa(tarefa_id):
 @app.route('/excluir/<int:tarefa_id>')
 def excluir_tarefa(tarefa_id):
     try:
+<<<<<<< HEAD
         conn = get_db_connection()
         cursor = conn.cursor()
         
@@ -220,6 +298,11 @@ def excluir_tarefa(tarefa_id):
         
         conn.commit()
         conn.close()
+=======
+        db = get_db()
+        db.execute('DELETE FROM tariffs WHERE id = ?', (tarefa_id,))
+        db.commit()
+>>>>>>> 7aa070119729e6bd15013bf3f4d6392e52058414
         return redirect('/')
     except Exception as e:
         return f"Erro ao excluir tarefa: {str(e)}", 500
@@ -227,6 +310,7 @@ def excluir_tarefa(tarefa_id):
 @app.route('/limpar_concluidas')
 def limpar_concluidas():
     try:
+<<<<<<< HEAD
         conn = get_db_connection()
         cursor = conn.cursor()
         
@@ -237,13 +321,31 @@ def limpar_concluidas():
         
         conn.commit()
         conn.close()
+=======
+        db = get_db()
+        db.execute('DELETE FROM tariffs WHERE concluida = 1')
+        db.commit()
+>>>>>>> 7aa070119729e6bd15013bf3f4d6392e52058414
         return redirect('/')
     except Exception as e:
         return f"Erro ao limpar tarefas concluidas: {str(e)}", 500
 
+<<<<<<< HEAD
 # Sua função get_weather_data() permanece igual...
 
 if __name__ == '__main__':
     init_db()  # Cria tabelas ao iniciar
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
+=======
+if __name__ == '__main__':
+    if not os.path.exists(DATABASE):
+        print("Criando novo banco de dados...")
+        init_db()
+    else:
+        print("Banco de dados ja existe.")
+    
+    # Configuração para produção - usar porta do Render
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=False, host='0.0.0.0', port=port)
+>>>>>>> 7aa070119729e6bd15013bf3f4d6392e52058414

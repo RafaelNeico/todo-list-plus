@@ -1,4 +1,8 @@
 Flask==2.3.3
 requests==2.31.0
+<<<<<<< HEAD
 gunicorn==21.2.0
 psycopg2-binary==2.9.7
+=======
+gunicorn==21.2.0
+>>>>>>> 7aa070119729e6bd15013bf3f4d6392e52058414
