@@ -1,46 +1,63 @@
 import os
 import psycopg2
-from urllib.parse import urlparse
 from flask import Flask, render_template, request, redirect
 import requests
 
 app = Flask(__name__)
 
-# Configuração da API do OpenWeather - usando variável de ambiente
-OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY', '00242a4366f2f684e8f901da0d365d44')
-OPENWEATHER_BASE_URL = 'http://api.openweathermap.org/data/2.5/weather'
-
-# Configuração do PostgreSQL
 def get_db_connection():
-    # No Render, use a variável de ambiente DATABASE_URL
+    """Conecta ao PostgreSQL no Render com debug"""
     database_url = os.environ.get('DATABASE_URL')
     
+    print("=" * 50)
+    print("🔍 DEBUG DATABASE CONNECTION")
+    print(f"DATABASE_URL exists: {bool(database_url)}")
     if database_url:
-        # Parse da URL do PostgreSQL
-        result = urlparse(database_url)
-        conn = psycopg2.connect(
-            database=result.path[1:],  # Remove a barra inicial
-            user=result.username,
-            password=result.password,
-            host=result.hostname,
-            port=result.port,
-            sslmode='require'
-        )
-        return conn
+        print(f"URL starts with: {database_url[:50]}...")
+    
+    if database_url:
+        try:
+            # Conecta ao PostgreSQL
+            conn = psycopg2.connect(database_url, sslmode='require')
+            
+            # Testa a conexão
+            cursor = conn.cursor()
+            cursor.execute("SELECT version();")
+            db_version = cursor.fetchone()
+            print(f"✅ PostgreSQL connected: {db_version[0]}")
+            cursor.close()
+            
+            return conn
+        except Exception as e:
+            print(f"❌ PostgreSQL connection failed: {e}")
+            print("🔄 Falling back to SQLite...")
+            return get_sqlite_connection()
     else:
-        # Fallback para SQLite local (desenvolvimento)
-        import sqlite3
-        conn = sqlite3.connect('tarefas.db')
-        conn.row_factory = sqlite3.Row
-        return conn
+        print("ℹ️  No DATABASE_URL, using SQLite")
+        return get_sqlite_connection()
+
+def get_sqlite_connection():
+    """Fallback para SQLite"""
+    import sqlite3
+    # No Render, usa /tmp para persistência
+    db_path = '/tmp/tarefas.db' if os.environ.get('RENDER') else 'tarefas.db'
+    print(f"📁 SQLite path: {db_path}")
+    
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def init_db():
-    """Cria a tabela se não existir"""
+    """Cria tabelas se não existirem"""
+    print("🔄 Initializing database...")
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Verifica se estamos usando PostgreSQL
-    if os.environ.get('DATABASE_URL'):
+    # Detecta se é PostgreSQL
+    is_postgres = os.environ.get('DATABASE_URL')
+    print(f"📊 Database type: {'PostgreSQL' if is_postgres else 'SQLite'}")
+    
+    if is_postgres:
         # PostgreSQL
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS tarefas (
@@ -53,8 +70,9 @@ def init_db():
                 data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        print("✅ PostgreSQL table created/verified")
     else:
-        # SQLite local
+        # SQLite
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS tarefas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,61 +84,35 @@ def init_db():
                 data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        print("✅ SQLite table created/verified")
     
     conn.commit()
+    
+    # Conta tarefas existentes
+    cursor.execute("SELECT COUNT(*) FROM tarefas")
+    count = cursor.fetchone()[0]
+    print(f"📈 Total tasks in database: {count}")
+    
     conn.close()
+    print("✅ Database initialization complete")
 
-    def get_weather_data(city='São Paulo'):
-
-    
-    
-    if OPENWEATHER_API_KEY == 'sua_chave_aqui' or not OPENWEATHER_API_KEY:
-        return None
-        
-    try:
-        params = {
-            'q': city,
-            'appid': OPENWEATHER_API_KEY,
-            'units': 'metric',  # Para temperatura em Celsius
-            'lang': 'pt_br'     # Para descrições em português
-        }
-        
-        response = requests.get(OPENWEATHER_BASE_URL, params=params, timeout=10)
-        
-        if response.status_code == 200:
-            data = response.json()
-            return {
-                'cidade': data['name'],
-                'temperatura': round(data['main']['temp']),
-                'descricao': data['weather'][0]['description'].title(),
-                'icone': data['weather'][0]['icon'],
-                'humidade': data['main']['humidity'],
-                'vento': round(data['wind']['speed'] * 3.6),  # Converte m/s para km/h
-                'sensacao': round(data['main']['feels_like'])
-            }
-        else:
-            print(f"Erro na API do clima: {response.status_code}")
-            return None
-            
-    except Exception as e:
-        print(f"Erro ao buscar dados do clima: {e}")
-        return None
-
-# Rota principal
 @app.route('/')
 def index():
     try:
-        init_db()  # Garante que a tabela existe
+        print("\n🌐 HOME PAGE REQUEST")
+        init_db()
         conn = get_db_connection()
         cursor = conn.cursor()
         
         cursor.execute('SELECT * FROM tarefas ORDER BY id DESC')
-        tarefas = cursor.fetchall()
+        tarefas_data = cursor.fetchall()
         
-        # Converter para dicionário
-        lista_tarefas = []
-        for tarefa in tarefas:
-            lista_tarefas.append({
+        print(f"📋 Tasks fetched: {len(tarefas_data)}")
+        
+        # Converter para formato padrão
+        tarefas = []
+        for tarefa in tarefas_data:
+            tarefas.append({
                 'id': tarefa[0],
                 'descricao': tarefa[1],
                 'categoria': tarefa[2],
@@ -131,15 +123,11 @@ def index():
         
         conn.close()
         
-        # Obter dados do clima
-        weather_data = get_weather_data()
+        weather = get_weather_data()
+        return render_template('index.html', tarefas=tarefas, weather=weather)
         
-        return render_template('index.html', 
-                             tarefas=lista_tarefas, 
-                             weather=weather_data)
-                             
     except Exception as e:
-        print("Erro ao carregar tarefas:", e)
+        print(f"❌ Error in index: {e}")
         return render_template('index.html', tarefas=[], weather=None)
 
 @app.route('/add', methods=['POST'])
@@ -150,32 +138,40 @@ def add_task():
         prioridade = request.form.get('prioridade', 'Média')
         prazo = request.form.get('prazo', '')
         
+        print(f"\n➕ ADDING TASK: {descricao}")
+        
         conn = get_db_connection()
         cursor = conn.cursor()
         
         if os.environ.get('DATABASE_URL'):
             # PostgreSQL
             cursor.execute(
-                'INSERT INTO tarefas (descricao, categoria, prioridade, prazo) VALUES (%s, %s, %s, %s)',
+                'INSERT INTO tarefas (descricao, categoria, prioridade, prazo) VALUES (%s, %s, %s, %s) RETURNING id',
                 (descricao, categoria, prioridade, prazo)
             )
+            task_id = cursor.fetchone()[0]
+            print(f"✅ Task added to PostgreSQL with ID: {task_id}")
         else:
             # SQLite
             cursor.execute(
                 'INSERT INTO tarefas (descricao, categoria, prioridade, prazo) VALUES (?, ?, ?, ?)',
                 (descricao, categoria, prioridade, prazo)
             )
+            task_id = cursor.lastrowid
+            print(f"✅ Task added to SQLite with ID: {task_id}")
         
         conn.commit()
         conn.close()
-        
         return redirect('/')
+        
     except Exception as e:
-        return f"Erro ao adicionar tarefa: {str(e)}", 500
+        print(f"❌ Error adding task: {e}")
+        return f"Erro ao adicionar: {str(e)}", 500
 
 @app.route('/concluir/<int:tarefa_id>')
 def concluir_tarefa(tarefa_id):
     try:
+        print(f"✅ COMPLETING TASK: {tarefa_id}")
         conn = get_db_connection()
         cursor = conn.cursor()
         
@@ -186,13 +182,16 @@ def concluir_tarefa(tarefa_id):
         
         conn.commit()
         conn.close()
+        print(f"✅ Task {tarefa_id} completed")
         return redirect('/')
     except Exception as e:
+        print(f"❌ Error completing task: {e}")
         return f"Erro ao concluir tarefa: {str(e)}", 500
 
 @app.route('/reabrir/<int:tarefa_id>')
 def reabrir_tarefa(tarefa_id):
     try:
+        print(f"🔄 REOPENING TASK: {tarefa_id}")
         conn = get_db_connection()
         cursor = conn.cursor()
         
@@ -203,13 +202,16 @@ def reabrir_tarefa(tarefa_id):
         
         conn.commit()
         conn.close()
+        print(f"✅ Task {tarefa_id} reopened")
         return redirect('/')
     except Exception as e:
+        print(f"❌ Error reopening task: {e}")
         return f"Erro ao reabrir tarefa: {str(e)}", 500
 
 @app.route('/excluir/<int:tarefa_id>')
 def excluir_tarefa(tarefa_id):
     try:
+        print(f"🗑️ DELETING TASK: {tarefa_id}")
         conn = get_db_connection()
         cursor = conn.cursor()
         
@@ -220,30 +222,39 @@ def excluir_tarefa(tarefa_id):
         
         conn.commit()
         conn.close()
+        print(f"✅ Task {tarefa_id} deleted")
         return redirect('/')
     except Exception as e:
+        print(f"❌ Error deleting task: {e}")
         return f"Erro ao excluir tarefa: {str(e)}", 500
 
-@app.route('/limpar_concluidas')
-def limpar_concluidas():
+def get_weather_data(city='São Paulo'):
+    """Sua função existente do clima"""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        api_key = os.environ.get('OPENWEATHER_API_KEY', 'sua_chave_aqui')
+        if not api_key or api_key == 'sua_chave_aqui':
+            return None
+            
+        url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric&lang=pt_br"
+        response = requests.get(url)
         
-        if os.environ.get('DATABASE_URL'):
-            cursor.execute('DELETE FROM tarefas WHERE concluida = TRUE')
-        else:
-            cursor.execute('DELETE FROM tarefas WHERE concluida = 1')
-        
-        conn.commit()
-        conn.close()
-        return redirect('/')
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                'cidade': data['name'],
+                'temperatura': round(data['main']['temp']),
+                'descricao': data['weather'][0]['description'].title(),
+                'icone': data['weather'][0]['icon'],
+                'sensacao': round(data['main']['feels_like'])
+            }
+        return None
     except Exception as e:
-        return f"Erro ao limpar tarefas concluidas: {str(e)}", 500
-
-# Sua função get_weather_data() permanece igual...
+        print(f"❌ Weather API error: {e}")
+        return None
 
 if __name__ == '__main__':
-    init_db()  # Cria tabelas ao iniciar
+    print("🚀 Starting Flask application...")
+    init_db()
     port = int(os.environ.get('PORT', 5000))
+    print(f"🌐 Server running on port {port}")
     app.run(host='0.0.0.0', port=port)
