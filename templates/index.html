@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="pt-br" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lista de Tarefas</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --bg-card: #ffffff;
+            --text-primary: #212529;
+            --text-secondary: #6c757d;
+            --border-color: #dee2e6;
+            --shadow: rgba(0, 0, 0, 0.1);
+            --weather-bg: linear-gradient(135deg, #74b9ff, #0984e3);
+        }
+
+        [data-bs-theme="dark"] {
+            --bg-primary: #121212;
+            --bg-secondary: #1e1e1e;
+            --bg-card: #2d2d2d;
+            --text-primary: #e9ecef;
+            --text-secondary: #adb5bd;
+            --border-color: #495057;
+            --shadow: rgba(0, 0, 0, 0.3);
+            --weather-bg: linear-gradient(135deg, #2d3436, #636e72);
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            transition: all 0.3s ease;
+        }
+
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 0.125rem 0.25rem var(--shadow);
+        }
+
+        .list-group-item {
+            background-color: var(--bg-card);
+            border-color: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .category-badge { font-size: 0.75em; }
+        .priority-badge { font-size: 0.75em; }
+        
+        .task-completed { 
+            opacity: 0.6; 
+            text-decoration: line-through;
+            background-color: var(--bg-secondary) !important;
+        }
+        
+        .btn-action { padding: 0.25rem 0.5rem; }
+        
+        .weather-card { 
+            background: var(--weather-bg); 
+            color: white;
+            border: none;
+        }
+        
+        .weather-icon { width: 64px; height: 64px; }
+        
+        .theme-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            box-shadow: 0 2px 10px var(--shadow);
+        }
+        
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+        }
+        
+        .empty-state {
+            padding: 3rem 1rem;
+            text-align: center;
+        }
+        
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+        
+        .form-control, .form-select {
+            background-color: var(--bg-card);
+            color: var(--text-primary);
+            border-color: var(--border-color);
+        }
+        
+        .form-control:focus, .form-select:focus {
+            background-color: var(--bg-card);
+            color: var(--text-primary);
+            border-color: #86b7fe;
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="border-bottom">
+        <div class="container py-3">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <h1 class="h3 mb-0">
+                        <i class="fas fa-tasks me-2"></i>Lista de Tarefas
+                    </h1>
+                </div>
+                <div class="col-md-6 text-end">
+                    <small class="text-muted" id="current-date">Carregando data...</small>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container my-4">
+        <div class="row">
+            <!-- Coluna principal com tarefas -->
+            <div class="col-lg-8">
+                <!-- Card de Estatísticas -->
+                <div class="card stats-card mb-4">
+                    <div class="card-body py-3">
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <h4 class="mb-0">{{ tarefas|length }}</h4>
+                                <small>Total</small>
+                            </div>
+                            <div class="col-4">
+                                <h4 class="mb-0">{{ tarefas|selectattr("concluida")|list|length }}</h4>
+                                <small>Concluídas</small>
+                            </div>
+                            <div class="col-4">
+                                <h4 class="mb-0">{{ tarefas|rejectattr("concluida")|list|length }}</h4>
+                                <small>Pendentes</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Formulário para Adicionar Tarefa -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-plus-circle me-2"></i>Nova Tarefa</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" action="/add">
+                            <div class="row g-3">
+                                <div class="col-md-5">
+                                    <input type="text" name="descricao" class="form-control" placeholder="O que precisa fazer?" required>
+                                </div>
+                                <div class="col-md-2">
+                                    <select name="categoria" class="form-select">
+                                        <option value="Trabalho">Trabalho</option>
+                                        <option value="Estudo">Estudos</option>
+                                        <option value="Casa">Casa</option>
+                                        <option value="Saúde">Saúde</option>
+                                        <option value="Lazer">Lazer</option>
+                                        <option value="Geral" selected>Geral</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <select name="prioridade" class="form-select">
+                                        <option value="Baixa">Baixa</option>
+                                        <option value="Média" selected>Média</option>
+                                        <option value="Alta">Alta</option>
+                                        <option value="Urgente">Urgente</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <input type="date" name="prazo" class="form-control">
+                                </div>
+                                <div class="col-md-1">
+                                    <button type="submit" class="btn btn-success w-100" title="Adicionar Tarefa">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Lista de Tarefas -->
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="fas fa-list me-2"></i>Suas Tarefas</h5>
+                        <div>
+                            <span class="badge bg-primary">{{ tarefas|length }} tarefa(s)</span>
+                            {% if tarefas and tarefas|selectattr("concluida")|list|length > 0 %}
+                            <a href="/limpar_concluidas" class="btn btn-outline-danger btn-sm ms-2" onclick="return confirm('Tem certeza que deseja excluir todas as tarefas concluidas?')">
+                                <i class="fas fa-trash me-1"></i>Limpar Concluídas
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        {% if tarefas %}
+                        <div class="list-group list-group-flush">
+                            {% for tarefa in tarefas %}
+                            <div class="list-group-item {% if tarefa.concluida %}task-completed{% endif %}">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex align-items-center">
+                                            <span class="me-3">
+                                                {% if tarefa.concluida %}
+                                                <i class="fas fa-check-circle text-success fa-lg"></i>
+                                                {% else %}
+                                                <i class="far fa-circle text-secondary fa-lg"></i>
+                                                {% endif %}
+                                            </span>
+                                            <div class="w-100">
+                                                <h6 class="mb-1 {% if tarefa.concluida %}text-muted{% endif %}">
+                                                    {{ tarefa.descricao }}
+                                                </h6>
+                                                <div class="d-flex flex-wrap gap-2 mt-1">
+                                                    <span class="badge category-badge bg-secondary">
+                                                        <i class="fas fa-tag me-1"></i>{{ tarefa.categoria }}
+                                                    </span>
+                                                    <span class="badge priority-badge 
+                                                        {% if tarefa.prioridade == 'Baixa' %}bg-success
+                                                        {% elif tarefa.prioridade == 'Média' %}bg-warning
+                                                        {% elif tarefa.prioridade == 'Alta' %}bg-danger
+                                                        {% else %}bg-dark{% endif %}">
+                                                        <i class="fas fa-flag me-1"></i>{{ tarefa.prioridade }}
+                                                    </span>
+                                                    {% if tarefa.prazo %}
+                                                    <span class="badge bg-info">
+                                                        <i class="far fa-calendar me-1"></i>{{ tarefa.prazo }}
+                                                    </span>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="flex-shrink-0 ms-3">
+                                        {% if not tarefa.concluida %}
+                                        <a href="/concluir/{{ tarefa.id }}" class="btn btn-sm btn-outline-success me-1 btn-action" title="Concluir Tarefa">
+                                            <i class="fas fa-check"></i>
+                                        </a>
+                                        {% else %}
+                                        <a href="/reabrir/{{ tarefa.id }}" class="btn btn-sm btn-outline-secondary me-1 btn-action" title="Reabrir Tarefa">
+                                            <i class="fas fa-redo"></i>
+                                        </a>
+                                        {% endif %}
+                                        <a href="/excluir/{{ tarefa.id }}" class="btn btn-sm btn-outline-danger btn-action" title="Excluir Tarefa" onclick="return confirm('Tem certeza que deseja excluir esta tarefa?')">
+                                            <i class="fas fa-trash"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="empty-state">
+                            <i class="fas fa-clipboard-list text-muted"></i>
+                            <h5 class="text-muted">Nenhuma tarefa encontrada</h5>
+                            <p class="text-muted">Adicione sua primeira tarefa usando o formulário acima</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Coluna Lateral -->
+            <div class="col-lg-4">
+                <!-- Card do Clima -->
+                <div class="card weather-card mb-4">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">
+                            <i class="fas fa-cloud-sun me-2"></i>Clima Atual
+                        </h5>
+                        
+                        {% if weather %}
+                        <div class="weather-info">
+                            <h4>{{ weather.cidade }}</h4>
+                            <div class="d-flex align-items-center justify-content-center my-3">
+                                <img src="http://openweathermap.org/img/wn/{{ weather.icone }}@2x.png" 
+                                     alt="{{ weather.descricao }}" class="weather-icon">
+                                <h2 class="ms-3">{{ weather.temperatura }}°C</h2>
+                            </div>
+                            <p class="mb-2">{{ weather.descricao }}</p>
+                            <div class="row text-center small">
+                                <div class="col-6">
+                                    <i class="fas fa-temperature-low me-1"></i>
+                                    Sensação: {{ weather.sensacao }}°C
+                                </div>
+                                <div class="col-6">
+                                    <i class="fas fa-tint me-1"></i>
+                                    Umidade: {{ weather.humidade }}%
+                                </div>
+                                <div class="col-6 mt-2">
+                                    <i class="fas fa-wind me-1"></i>
+                                    Vento: {{ weather.vento }} km/h
+                                </div>
+                                <div class="col-6 mt-2">
+                                    <i class="fas fa-map-marker-alt me-1"></i>
+                                    {{ weather.cidade }}
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-3">
+                            <i class="fas fa-exclamation-triangle fa-2x mb-3"></i>
+                            <p>Clima não disponível</p>
+                            <small class="d-block">
+                                <a href="https://openweathermap.org/api" target="_blank" class="text-light">
+                                    Obtenha uma chave API gratuita
+                                </a>
+                            </small>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Card de Ações Rápidas -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-bolt me-2"></i>Ações Rápidas</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <a href="/limpar_concluidas" class="btn btn-outline-danger btn-sm" onclick="return confirm('Tem certeza que deseja excluir todas as tarefas concluidas?')">
+                                <i class="fas fa-trash me-1"></i>Limpar Concluídas
+                            </a>
+                            <button class="btn btn-outline-secondary btn-sm" id="toggle-theme-btn">
+                                <i class="fas fa-moon me-1"></i>Alternar Tema
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card de Informações -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Informações</h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="small mb-2">Este é um sistema de gerenciamento de tarefas com:</p>
+                        <ul class="small list-unstyled">
+                            <li><i class="fas fa-check text-success me-1"></i> Categorias e prioridades</li>
+                            <li><i class="fas fa-check text-success me-1"></i> Prazos opcionais</li>
+                            <li><i class="fas fa-check text-success me-1"></i> Modo claro/escuro</li>
+                            <li><i class="fas fa-check text-success me-1"></i> Dados climáticos</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botão Flutuante para Alternar Tema -->
+    <button class="btn btn-primary theme-toggle" id="theme-toggle" title="Alternar tema">
+        <i class="fas fa-moon"></i>
+    </button>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Atualizar data atual
+        function updateCurrentDate() {
+            const now = new Date();
+            const options = { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            };
+            document.getElementById('current-date').textContent = 
+                now.toLocaleDateString('pt-BR', options);
+        }
+        
+        // Gerenciamento do tema
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-bs-theme', savedTheme);
+            updateThemeIcon(savedTheme);
+        }
+        
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-bs-theme');
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            
+            document.documentElement.setAttribute('data-bs-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateThemeIcon(newTheme);
+        }
+        
+        function updateThemeIcon(theme) {
+            const icon = document.querySelector('#theme-toggle i');
+            const btn = document.getElementById('toggle-theme-btn');
+            
+            if (theme === 'dark') {
+                icon.className = 'fas fa-sun';
+                if (btn) {
+                    btn.innerHTML = '<i class="fas fa-sun me-1"></i>Modo Claro';
+                }
+            } else {
+                icon.className = 'fas fa-moon';
+                if (btn) {
+                    btn.innerHTML = '<i class="fas fa-moon me-1"></i>Modo Escuro';
+                }
+            }
+        }
+        
+        // Event Listeners
+        document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+        const toggleThemeBtn = document.getElementById('toggle-theme-btn');
+        if (toggleThemeBtn) {
+            toggleThemeBtn.addEventListener('click', toggleTheme);
+        }
+        
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function() {
+            updateCurrentDate();
+            initTheme();
+        });
+    </script>
+</body>
+</html>
