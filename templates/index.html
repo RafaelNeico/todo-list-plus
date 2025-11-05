@@ -3,18 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerenciador de Tarefas</title>
+    <title>Gerenciador de Tarefas - PostgreSQL</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
+            padding: 20px;
+            margin: 0;
         }
         
         .container {
+            max-width: 900px;
+            margin: 0 auto;
             background: white;
             border-radius: 15px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.1);
@@ -29,12 +30,26 @@
         }
         
         .header h1 {
-            margin: 0;
             font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
         }
         
         .content {
             padding: 30px;
+        }
+        
+        .alert {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            color: #856404;
         }
         
         .form-tarefa {
@@ -62,6 +77,13 @@
             border: 2px solid #e9ecef;
             border-radius: 8px;
             font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
         }
         
         .btn {
@@ -73,6 +95,18 @@
             cursor: pointer;
             font-size: 16px;
             font-weight: 600;
+            transition: transform 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 14px;
         }
         
         .tarefa-item {
@@ -81,16 +115,25 @@
             border-radius: 10px;
             padding: 20px;
             margin-bottom: 15px;
+            transition: all 0.3s;
+        }
+        
+        .tarefa-item:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
         }
         
         .tarefa-item.concluida {
             background: #f8fff9;
             border-color: #28a745;
+            opacity: 0.8;
         }
         
         .tarefa-titulo {
             font-size: 1.3em;
             font-weight: 600;
+            color: #333;
             margin-bottom: 8px;
         }
         
@@ -102,6 +145,7 @@
         .tarefa-descricao {
             color: #666;
             margin-bottom: 15px;
+            line-height: 1.5;
         }
         
         .tarefa-data {
@@ -113,28 +157,22 @@
         .tarefa-acoes {
             display: flex;
             gap: 10px;
+            flex-wrap: wrap;
         }
         
         .btn-concluir {
             background: #28a745;
             color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
+        }
+        
+        .btn-editar {
+            background: #ffc107;
+            color: black;
         }
         
         .btn-excluir {
             background: #dc3545;
             color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
         }
         
         .empty-state {
@@ -143,11 +181,40 @@
             color: #666;
         }
         
+        .empty-state i {
+            font-size: 3em;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+        
         .status-bar {
             background: #f8f9fa;
             padding: 15px;
             text-align: center;
             border-top: 1px solid #e9ecef;
+            font-size: 0.9em;
+            color: #666;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .stat-item {
+            padding: 15px;
+        }
+        
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
             color: #666;
         }
     </style>
@@ -156,10 +223,33 @@
     <div class="container">
         <div class="header">
             <h1>📝 Gerenciador de Tarefas</h1>
-            <p>Organize suas tarefas de forma simples</p>
+            <p>Banco de Dados PostgreSQL - Dados Persistentes</p>
         </div>
         
         <div class="content">
+            {% if error %}
+                <div class="alert">
+                    ⚠️ {{ error }}
+                </div>
+            {% endif %}
+            
+            <!-- Estatísticas -->
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-number">{{ tarefas|length }}</div>
+                    <div class="stat-label">Total de Tarefas</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">{{ tarefas|selectattr('concluida')|list|length }}</div>
+                    <div class="stat-label">Concluídas</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">{{ tarefas|rejectattr('concluida')|list|length }}</div>
+                    <div class="stat-label">Pendentes</div>
+                </div>
+            </div>
+            
+            <!-- Formulário para adicionar tarefa -->
             <form class="form-tarefa" action="/adicionar" method="POST">
                 <div class="form-group">
                     <label for="titulo">Título da Tarefa:</label>
@@ -176,30 +266,34 @@
                 <button type="submit" class="btn">➕ Adicionar Tarefa</button>
             </form>
             
+            <!-- Lista de tarefas -->
             <div class="lista-tarefas">
                 {% if tarefas %}
                     {% for tarefa in tarefas %}
-                        <div class="tarefa-item {% if tarefa['concluida'] %}concluida{% endif %}">
+                        <div class="tarefa-item {% if tarefa.concluida %}concluida{% endif %}">
                             <div class="tarefa-titulo">
-                                {{ tarefa['titulo'] }}
-                                {% if tarefa['concluida'] %} ✅{% endif %}
+                                {{ tarefa.titulo }}
+                                {% if tarefa.concluida %} ✅{% endif %}
                             </div>
                             
-                            {% if tarefa['descricao'] %}
-                                <div class="tarefa-descricao">{{ tarefa['descricao'] }}</div>
+                            {% if tarefa.descricao %}
+                                <div class="tarefa-descricao">{{ tarefa.descricao }}</div>
                             {% endif %}
                             
                             <div class="tarefa-data">
-                                Criada em: {{ tarefa['data_criacao'] }}
+                                Criada em: {{ tarefa.data_criacao }}
                             </div>
                             
                             <div class="tarefa-acoes">
-                                {% if not tarefa['concluida'] %}
-                                    <a href="/concluir/{{ tarefa['id'] }}" class="btn-concluir">
+                                {% if not tarefa.concluida %}
+                                    <a href="/concluir/{{ tarefa.id }}" class="btn btn-small btn-concluir">
                                         ✅ Concluir
                                     </a>
+                                    <a href="/editar/{{ tarefa.id }}" class="btn btn-small btn-editar">
+                                        ✏️ Editar
+                                    </a>
                                 {% endif %}
-                                <a href="/excluir/{{ tarefa['id'] }}" class="btn-excluir" 
+                                <a href="/excluir/{{ tarefa.id }}" class="btn btn-small btn-excluir" 
                                    onclick="return confirm('Tem certeza que deseja excluir esta tarefa?')">
                                     🗑️ Excluir
                                 </a>
@@ -217,14 +311,14 @@
         </div>
         
         <div class="status-bar">
-            Sistema funcionando • 
+            ✅ Sistema com PostgreSQL • 
             <a href="/health" style="color: #667eea;">Verificar Status</a> • 
-            <a href="/reset-db" style="color: #667eea;" onclick="return confirm('Resetar o banco de dados? Isso apagará todas as tarefas.')">Resetar BD</a>
+            <a href="/api/tarefas" style="color: #667eea;">API JSON</a>
         </div>
     </div>
 
     <script>
-        // Confirmação para exclusão
+        // Adiciona confirmação para exclusão
         document.addEventListener('DOMContentLoaded', function() {
             const deleteButtons = document.querySelectorAll('.btn-excluir');
             deleteButtons.forEach(button => {
