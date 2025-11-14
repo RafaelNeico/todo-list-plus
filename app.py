@@ -42,7 +42,7 @@ def init_db():
         
     try:
         with conn.cursor() as cur:
-            # Criar tabela apenas se não existir (NÃO usa DROP)
+            # Criar tabela apenas se não existir 
             cur.execute('''
                 CREATE TABLE IF NOT EXISTS tarefas (
                     id SERIAL PRIMARY KEY,
@@ -126,7 +126,8 @@ def obter_clima(cidade='São Paulo'):
                 'erro': 'Chave da API não configurada'
             }
         
-        # Verificar se é a chave padrão (que pode não funcionar)
+        # CODIFICAÇÃO DE API
+        
         if api_key == '00242a4366f2f684e8f901da0d365d44':
             logger.warning("⚠️ Usando chave da API padrão - pode não funcionar")
         
@@ -199,7 +200,7 @@ def obter_clima(cidade='São Paulo'):
             'erro': str(e)
         }
 
-# Rota principal - CORRIGIDA com mapeamento dinâmico
+# Rota principal
 @app.route('/')
 def index():
     try:
@@ -233,7 +234,7 @@ def index():
             col_names = [desc[0] for desc in cur.description]  # Obter nomes das colunas
             logger.info(f"📊 Encontradas {len(tarefas_data)} tarefas para o usuário {user_id[:8]}")
         
-        # Converter usando mapeamento por nome de coluna - CORREÇÃO CRÍTICA
+        # Converter usando mapeamento por nome de coluna
         tarefas = []
         for tarefa_row in tarefas_data:
             # Criar dicionário mapeando nome da coluna para valor
@@ -255,7 +256,7 @@ def index():
                 else:
                     data_formatada = data_criacao.strftime('%d/%m/%Y %H:%M')
             
-            # Mapeamento CORRETO dos campos
+            # Mapeamento dos campos
             tarefa = {
                 'id': tarefa_dict.get('id'),
                 'descricao': tarefa_dict.get('descricao'),
@@ -481,7 +482,7 @@ def debug_db():
             cur.execute("SELECT COUNT(*) FROM tarefas WHERE user_id = %s AND concluida = FALSE", (user_id,))
             user_pendentes = cur.fetchone()[0]
             
-            # Listar tarefas recentes do usuário COM TODOS OS CAMPOS
+            # Listar tarefas recentes do usuário
             cur.execute("SELECT * FROM tarefas WHERE user_id = %s ORDER BY id DESC LIMIT 10", (user_id,))
             recent_tasks = cur.fetchall()
             col_names = [desc[0] for desc in cur.description]  # Pegar nomes das colunas
